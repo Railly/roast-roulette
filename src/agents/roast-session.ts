@@ -5,41 +5,58 @@ import { Buffer } from "node:buffer";
 import { createClient, streamToDataUri } from "../lib/elevenlabs";
 import { SFX_PROMPTS, type SfxKey } from "../lib/sfx";
 import {
-	ROAST_SYSTEM_PROMPT,
+	ROAST_SYSTEM_PROMPTS,
 	buildRoastPrompt,
 	parseRoastScript,
 	type RoastScript,
+	type Lang,
 } from "../lib/roast-engine";
 import type { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 export interface RoastState {
 	phase: "idle" | "analyzing" | "scripting" | "delivering" | "scoring" | "defense" | "done";
 	url: string | null;
-	screenshot: string | null;
 	script: RoastScript | null;
 	currentSegment: number;
 	pageContent: string | null;
+	lang: Lang;
 }
 
-const VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+const VOICE_IDS: Record<Lang, string> = {
+	en: "JBFqnCBsd6RMkjVDRZzb",
+	es: "pFZP5JQG7iQjIQuC4Bku",
+};
+
+const TTS_MODELS: Record<Lang, string> = {
+	en: "eleven_flash_v2_5",
+	es: "eleven_multilingual_v2",
+};
 
 export class RoastSessionAgent extends Agent<Env, RoastState> {
 	initialState: RoastState = {
 		phase: "idle",
 		url: null,
-		screenshot: null,
 		script: null,
 		currentSegment: 0,
 		pageContent: null,
+		lang: "en",
 	};
 
+	private get voiceId() {
+		return VOICE_IDS[this.state.lang] || VOICE_IDS.en;
+	}
+
+	private get ttsModel() {
+		return TTS_MODELS[this.state.lang] || TTS_MODELS.en;
+	}
+
 	@callable()
-	async analyzeUrl(url: string): Promise<{ content: string; title: string }> {
-		this.setState({ ...this.state, phase: "analyzing", url });
+	async analyzeUrl(url: string, lang: Lang = "en"): Promise<{ content: string; title: string }> {
+		this.setState({ ...this.state, phase: "analyzing", url, lang });
 		this.broadcast(JSON.stringify({ type: "phase", phase: "analyzing" }));
 
 		const res = await fetch(url, {
-			headers: { "User-Agent": "RoastRoulette/1.0 (https://roastroulette.com)" },
+			headers: { "User-Agent": "RoastRoulette/1.0" },
 		});
 		const html = await res.text();
 
@@ -53,7 +70,6 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 			.slice(0, 15000);
 
 		this.setState({ ...this.state, pageContent: textContent });
-
 		return { content: textContent, title };
 	}
 
@@ -62,13 +78,14 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.setState({ ...this.state, phase: "scripting" });
 		this.broadcast(JSON.stringify({ type: "phase", phase: "scripting" }));
 
+		const lang = this.state.lang;
 		const workersai = createWorkersAI({ binding: this.env.AI });
 		let text = "";
 		try {
 			const result = await generateText({
-				model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-				system: ROAST_SYSTEM_PROMPT,
-				prompt: buildRoastPrompt(this.state.url!, this.state.pageContent!),
+				model: workersai("@cf/moonshotai/kimi-k2.5"),
+				system: ROAST_SYSTEM_PROMPTS[lang],
+				prompt: buildRoastPrompt(this.state.url!, this.state.pageContent!, lang),
 			});
 			text = result.text;
 		} catch (err) {
@@ -76,7 +93,7 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		}
 
 		console.log("Raw LLM response:", text.slice(0, 500));
-		const script = parseRoastScript(text);
+		const script = parseRoastScript(text, lang);
 		this.setState({ ...this.state, script, phase: "delivering", currentSegment: 0 });
 		this.broadcast(JSON.stringify({ type: "phase", phase: "delivering" }));
 		this.broadcast(JSON.stringify({ type: "script", script }));
@@ -99,23 +116,23 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 
 		const client = createClient(this.env.ELEVENLABS_API_KEY);
 
-		const ttsPromise = client.textToSpeech.convert(VOICE_ID, {
-			text: segment.text,
-			modelId: "eleven_flash_v2_5",
-			outputFormat: "mp3_44100_128",
-		}).then((stream) => streamToDataUri(stream));
+		const ttsPromise = client.textToSpeech
+			.convert(this.voiceId, {
+				text: segment.text,
+				modelId: this.ttsModel,
+				outputFormat: "mp3_44100_128",
+			})
+			.then((stream) => streamToDataUri(stream));
 
 		let sfxPromise: Promise<string | undefined> = Promise.resolve(undefined);
 		if ("sfx" in segment && segment.sfx) {
 			const sfxKey = segment.sfx as SfxKey;
-			const sfxPrompt = SFX_PROMPTS[sfxKey];
-			if (sfxPrompt) {
+			if (SFX_PROMPTS[sfxKey]) {
 				sfxPromise = this.getCachedSfx(sfxKey, client);
 			}
 		}
 
 		const [audio, sfxAudio] = await Promise.all([ttsPromise, sfxPromise]);
-
 		return { audio, sfxAudio };
 	}
 
@@ -127,14 +144,18 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.setState({ ...this.state, phase: "scoring" });
 		this.broadcast(JSON.stringify({ type: "phase", phase: "scoring" }));
 
-		const scoreText = `Final score: ${script.finalScore} out of 100. ${script.scoreComment}`;
+		const lang = this.state.lang;
+		const scoreText = lang === "es"
+			? `Puntaje final: ${script.finalScore} de 100. ${script.scoreComment}`
+			: `Final score: ${script.finalScore} out of 100. ${script.scoreComment}`;
+
 		const client = createClient(this.env.ELEVENLABS_API_KEY);
 
 		const [audio, sfxAudio] = await Promise.all([
 			client.textToSpeech
-				.convert(VOICE_ID, {
+				.convert(this.voiceId, {
 					text: scoreText,
-					modelId: "eleven_flash_v2_5",
+					modelId: this.ttsModel,
 					outputFormat: "mp3_44100_128",
 				})
 				.then((s) => streamToDataUri(s)),

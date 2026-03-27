@@ -1,16 +1,48 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
+}
+
 :root {
   --background: #000000;
-  --foreground: #ededed;
-  --muted: #525252;
+  --foreground: #fafafa;
+  --muted: #262626;
   --muted-foreground: #a3a3a3;
   --border: #262626;
+  --input: #262626;
   --card: #0a0a0a;
+  --card-foreground: #fafafa;
   --accent: #171717;
-  --burn: #ef4444;
-  --compliment: #3b82f6;
-  --score-gold: #fbbf24;
+  --accent-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #0a0a0a;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --destructive: #ef4444;
+  --ring: #525252;
+  --radius: 0.625rem;
 }
 
 html, body, #root {
@@ -20,6 +52,12 @@ html, body, #root {
   background: var(--background);
   color: var(--foreground);
   font-family: system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
 }
 
 @keyframes fade-up {
@@ -35,11 +73,6 @@ html, body, #root {
 @keyframes scale-in {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
-  50% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); }
 }
 
 @keyframes score-count {
