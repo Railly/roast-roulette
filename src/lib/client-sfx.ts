@@ -9,35 +9,27 @@ function preload(name: string): HTMLAudioElement {
 	return audio;
 }
 
-function play(name: string, volume = 0.6) {
+function play(name: string, volume = 0.85) {
 	const audio = preload(name);
 	const clone = audio.cloneNode(true) as HTMLAudioElement;
-	clone.volume = volume;
+	clone.volume = Math.min(1, volume);
 	clone.play().catch(() => {});
 }
 
 const BURN_SFX = [
-	{ name: "rimshot", vol: 0.7 },
-	{ name: "airhorn", vol: 0.5 },
-	{ name: "crowd-laugh", vol: 0.6 },
-	{ name: "crowd-ooh", vol: 0.6 },
-	{ name: "record-scratch", vol: 0.5 },
+	{ name: "rimshot", vol: 0.9 },
+	{ name: "airhorn", vol: 0.75 },
+	{ name: "crowd-laugh", vol: 0.85 },
+	{ name: "crowd-ooh", vol: 0.85 },
+	{ name: "record-scratch", vol: 0.8 },
+	{ name: "sad-trombone", vol: 0.8 },
+	{ name: "womp-womp", vol: 0.8 },
 ];
 
 const COMPLIMENT_SFX = [
-	{ name: "crowd-cheer", vol: 0.6 },
-	{ name: "crowd-ooh", vol: 0.5 },
-	{ name: "dramatic-reveal", vol: 0.5 },
-];
-
-const FAIL_SFX = [
-	{ name: "sad-trombone", vol: 0.6 },
-	{ name: "womp-womp", vol: 0.6 },
-];
-
-const SCORE_SFX = [
-	{ name: "dramatic-reveal", vol: 0.7 },
-	{ name: "crowd-cheer", vol: 0.7 },
+	{ name: "crowd-cheer", vol: 0.9 },
+	{ name: "crowd-ooh", vol: 0.85 },
+	{ name: "crowd-laugh", vol: 0.8 },
 ];
 
 function pickRandom<T>(arr: T[]): T {
@@ -54,7 +46,8 @@ function playVaried(options: { name: string; vol: number }[]) {
 }
 
 export function preloadAll() {
-	[...BURN_SFX, ...COMPLIMENT_SFX, ...FAIL_SFX, ...SCORE_SFX].forEach((s) => preload(s.name));
+	const all = [...BURN_SFX, ...COMPLIMENT_SFX, { name: "dramatic-hit" }, { name: "mic-drop" }];
+	all.forEach((s) => preload(s.name));
 }
 
 export function playBurnSfx() {
@@ -66,8 +59,8 @@ export function playComplimentSfx() {
 }
 
 export function playScoreSfx() {
-	play("dramatic-reveal", 0.7);
-	setTimeout(() => play("crowd-cheer", 0.65), 800);
+	play("dramatic-hit", 0.9);
+	setTimeout(() => play("crowd-cheer", 0.9), 1000);
 }
 
 export function playMicDrop() {
