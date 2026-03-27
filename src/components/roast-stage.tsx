@@ -3,6 +3,7 @@ import type { RoastScript, RoastSegment } from "../lib/roast-engine";
 import { HypeScore } from "./hype-score";
 import { Orb, type AgentState } from "./ui/orb";
 import { ShimmeringText } from "./ui/shimmering-text";
+import { playBurnSfx, playComplimentSfx, playScoreSfx } from "../lib/client-sfx";
 
 interface RoastStageProps {
 	script: RoastScript;
@@ -41,12 +42,6 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 		});
 	}, []);
 
-	const playSfx = useCallback((dataUri: string) => {
-		const audio = new Audio(dataUri);
-		audio.volume = 0.35;
-		audio.play().catch(() => {});
-	}, []);
-
 	const playSegment = useCallback(
 		async (index: number) => {
 			setIsPlaying(true);
@@ -63,7 +58,6 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 
 			const result = (await agent.call("speakSegment", [index])) as {
 				audio: string;
-				sfxAudio?: string;
 			};
 
 			if (segment) {
@@ -72,15 +66,19 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 
 			await playAudio(result.audio);
 
-			if (result.sfxAudio) {
-				playSfx(result.sfxAudio);
-				await new Promise((r) => setTimeout(r, 800));
+			if (segment && index >= 0) {
+				if (segment.type === "burn") {
+					playBurnSfx();
+				} else {
+					playComplimentSfx();
+				}
+				await new Promise((r) => setTimeout(r, 600));
 			}
 
 			setOrbState("thinking");
 			setIsPlaying(false);
 		},
-		[agent, script, playAudio, playSfx],
+		[agent, script, playAudio],
 	);
 
 	const playAll = useCallback(async () => {
@@ -98,11 +96,10 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 
 		const scoreResult = (await agent.call("speakScore")) as {
 			audio: string;
-			sfxAudio: string;
 		};
 
 		setShowScore(true);
-		playSfx(scoreResult.sfxAudio);
+		playScoreSfx();
 		await playAudio(scoreResult.audio);
 
 		await agent.call("finishRoast");

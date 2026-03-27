@@ -1,7 +1,6 @@
 import { Agent, callable } from "agents";
 import { Buffer } from "node:buffer";
 import { createClient, streamToDataUri } from "../lib/elevenlabs";
-import { SFX_PROMPTS, type SfxKey } from "../lib/sfx";
 import {
 	ROAST_SYSTEM_PROMPTS,
 	buildRoastPrompt,
@@ -9,7 +8,7 @@ import {
 	type RoastScript,
 	type Lang,
 } from "../lib/roast-engine";
-import type { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+
 
 export interface RoastState {
 	phase: "idle" | "analyzing" | "scripting" | "delivering" | "scoring" | "defense" | "done";
@@ -121,7 +120,7 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 	}
 
 	@callable()
-	async speakSegment(index: number): Promise<{ audio: string; sfxAudio?: string }> {
+	async speakSegment(index: number): Promise<{ audio: string }> {
 		const script = this.state.script;
 		if (!script) throw new Error("No script generated");
 
@@ -134,29 +133,18 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.broadcast(JSON.stringify({ type: "segment", index, segment }));
 
 		const client = createClient(this.env.ELEVENLABS_API_KEY);
+		const stream = await client.textToSpeech.convert(this.voiceId, {
+			text: segment.text,
+			modelId: this.ttsModel,
+			outputFormat: "mp3_44100_128",
+		});
+		const audio = await streamToDataUri(stream);
 
-		const ttsPromise = client.textToSpeech
-			.convert(this.voiceId, {
-				text: segment.text,
-				modelId: this.ttsModel,
-				outputFormat: "mp3_44100_128",
-			})
-			.then((stream) => streamToDataUri(stream));
-
-		let sfxPromise: Promise<string | undefined> = Promise.resolve(undefined);
-		if ("sfx" in segment && segment.sfx) {
-			const sfxKey = segment.sfx as SfxKey;
-			if (SFX_PROMPTS[sfxKey]) {
-				sfxPromise = this.getCachedSfx(sfxKey, client);
-			}
-		}
-
-		const [audio, sfxAudio] = await Promise.all([ttsPromise, sfxPromise]);
-		return { audio, sfxAudio };
+		return { audio };
 	}
 
 	@callable()
-	async speakScore(): Promise<{ audio: string; sfxAudio: string }> {
+	async speakScore(): Promise<{ audio: string }> {
 		const script = this.state.script;
 		if (!script) throw new Error("No script");
 
@@ -169,19 +157,14 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 			: `Final score: ${script.finalScore} out of 100. ${script.scoreComment}`;
 
 		const client = createClient(this.env.ELEVENLABS_API_KEY);
+		const stream = await client.textToSpeech.convert(this.voiceId, {
+			text: scoreText,
+			modelId: this.ttsModel,
+			outputFormat: "mp3_44100_128",
+		});
+		const audio = await streamToDataUri(stream);
 
-		const [audio, sfxAudio] = await Promise.all([
-			client.textToSpeech
-				.convert(this.voiceId, {
-					text: scoreText,
-					modelId: this.ttsModel,
-					outputFormat: "mp3_44100_128",
-				})
-				.then((s) => streamToDataUri(s)),
-			this.getCachedSfx("crowd_cheer", client),
-		]);
-
-		return { audio, sfxAudio: sfxAudio! };
+		return { audio };
 	}
 
 	@callable()
@@ -190,40 +173,4 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.broadcast(JSON.stringify({ type: "phase", phase: "done" }));
 	}
 
-	private async getCachedSfx(
-		key: SfxKey,
-		client: ElevenLabsClient,
-	): Promise<string | undefined> {
-		const r2Key = `sfx/${key}.mp3`;
-
-		try {
-			const cached = await this.env.AUDIO_BUCKET?.get(r2Key);
-			if (cached) {
-				const buf = await cached.arrayBuffer();
-				const base64 = Buffer.from(buf).toString("base64");
-				return `data:audio/mpeg;base64,${base64}`;
-			}
-		} catch {}
-
-		const prompt = SFX_PROMPTS[key];
-		if (!prompt) return undefined;
-
-		const audio = await client.textToSoundEffects.convert({
-			text: prompt,
-			durationSeconds: 5,
-			promptInfluence: 0.5,
-		});
-
-		const dataUri = await streamToDataUri(audio);
-
-		try {
-			const base64Data = dataUri.split(",")[1];
-			const binaryData = Buffer.from(base64Data, "base64");
-			await this.env.AUDIO_BUCKET?.put(r2Key, binaryData, {
-				httpMetadata: { contentType: "audio/mpeg" },
-			});
-		} catch {}
-
-		return dataUri;
-	}
 }
