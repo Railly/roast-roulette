@@ -3,6 +3,7 @@ import type { RoastScript, RoastSegment } from "../lib/roast-engine";
 import { HypeScore } from "./hype-score";
 import { Orb, type AgentState } from "./ui/orb";
 import { ShimmeringText } from "./ui/shimmering-text";
+import { EmojiBurst } from "./emoji-burst";
 import { playBurnSfx, playComplimentSfx, playScoreSfx, preloadAll } from "../lib/client-sfx";
 
 interface RoastStageProps {
@@ -29,11 +30,15 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [orbColors, setOrbColors] = useState<[string, string]>(PHASE_COLORS.intro);
 	const [orbState, setOrbState] = useState<AgentState>("thinking");
+	const [emojiBurst, setEmojiBurst] = useState<{ type: "burn" | "compliment" | "score"; key: number } | null>(null);
+	const [glowType, setGlowType] = useState<"burn" | "compliment" | "score" | null>(null);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 	const autoPlayStarted = useRef(false);
+	const sfxReady = useRef(false);
 
 	useEffect(() => {
 		preloadAll();
+		setTimeout(() => { sfxReady.current = true; }, 500);
 	}, []);
 
 	const playAudio = useCallback((dataUri: string): Promise<void> => {
@@ -44,6 +49,12 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 			audio.onerror = () => resolve();
 			audio.play().catch(() => resolve());
 		});
+	}, []);
+
+	const triggerBurst = useCallback((type: "burn" | "compliment" | "score") => {
+		setEmojiBurst({ type, key: Date.now() });
+		setGlowType(type);
+		setTimeout(() => setGlowType(null), 2000);
 	}, []);
 
 	const playSegment = useCallback(
@@ -60,9 +71,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 				setOrbState("talking");
 			}
 
-			const result = (await agent.call("speakSegment", [index])) as {
-				audio: string;
-			};
+			const result = (await agent.call("speakSegment", [index])) as { audio: string };
 
 			if (segment) {
 				setPlayedSegments((prev) => [...prev, segment]);
@@ -70,19 +79,21 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 
 			await playAudio(result.audio);
 
-			if (segment) {
-				if (segment.type === "burn") {
+			if (segment && sfxReady.current) {
+				const isBurn = segment.type === "burn";
+				if (isBurn) {
 					playBurnSfx();
 				} else {
 					playComplimentSfx();
 				}
-				await new Promise((r) => setTimeout(r, 1000));
+				triggerBurst(isBurn ? "burn" : "compliment");
+				await new Promise((r) => setTimeout(r, 1200));
 			}
 
 			setOrbState("thinking");
 			setIsPlaying(false);
 		},
-		[agent, script, playAudio],
+		[agent, script, playAudio, triggerBurst],
 	);
 
 	const playAll = useCallback(async () => {
@@ -98,19 +109,18 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 		setOrbColors(PHASE_COLORS.score);
 		setOrbState("talking");
 
-		const scoreResult = (await agent.call("speakScore")) as {
-			audio: string;
-		};
+		const scoreResult = (await agent.call("speakScore")) as { audio: string };
 
 		setShowScore(true);
 		playScoreSfx();
+		triggerBurst("score");
 		await playAudio(scoreResult.audio);
 
 		await agent.call("finishRoast");
 		setOrbColors(PHASE_COLORS.done);
 		setOrbState(null);
 		setStagePhase("done");
-	}, [script, agent, playSegment, playAudio]);
+	}, [script, agent, playSegment, playAudio, triggerBurst]);
 
 	useEffect(() => {
 		if (!autoPlayStarted.current) {
@@ -127,40 +137,68 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 	}, [playedSegments]);
 
 	const currentSegment = currentIndex >= 0 ? script.segments[currentIndex] : null;
+	const activeType = currentSegment?.type || (stagePhase === "intro" ? "burn" : null);
+
+	const glowClass =
+		glowType === "burn"
+			? "animate-[glow-pulse-red_1s_ease-in-out]"
+			: glowType === "compliment"
+				? "animate-[glow-pulse-blue_1s_ease-in-out]"
+				: glowType === "score"
+					? "animate-[glow-pulse-gold_1.5s_ease-in-out]"
+					: "";
 
 	return (
 		<div className="space-y-6" style={{ animation: "scale-in 0.4s ease-out both" }}>
+			{emojiBurst && (
+				<EmojiBurst
+					key={emojiBurst.key}
+					type={emojiBurst.type}
+					count={emojiBurst.type === "score" ? 16 : 8}
+				/>
+			)}
+
 			<div className="flex flex-col items-center gap-4">
-				<div className="w-36 h-36 sm:w-44 sm:h-44">
+				<div className={`w-36 h-36 sm:w-44 sm:h-44 rounded-full transition-shadow duration-500 ${glowClass}`}>
 					<Orb colors={orbColors} agentState={orbState} />
 				</div>
 
-				{isPlaying && currentSegment ? (
-					<ShimmeringText
-						text={
-							stagePhase === "intro"
-								? "Warming up..."
-								: currentSegment.type === "burn"
-									? "Roasting..."
-									: "Complimenting..."
-						}
-						className="text-sm font-medium"
-						shimmerColor={orbColors[0]}
-						color="#737373"
-						duration={1.5}
-						spread={2}
-					/>
-				) : isPlaying ? (
-					<p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
-				) : null}
+				<div className="h-6 flex items-center">
+					{isPlaying ? (
+						<ShimmeringText
+							text={
+								stagePhase === "intro"
+									? "Warming up..."
+									: activeType === "burn"
+										? "Roasting... 🔥"
+										: "Props... 💙"
+							}
+							className="text-sm font-medium"
+							shimmerColor={orbColors[0]}
+							color="#737373"
+							duration={1.5}
+							spread={2}
+						/>
+					) : stagePhase === "done" ? (
+						<p className="text-sm text-muted-foreground">Show's over.</p>
+					) : null}
+				</div>
 			</div>
 
-			<div className="border border-border rounded-xl overflow-hidden">
+			<div className={`border rounded-xl overflow-hidden transition-colors duration-500 ${
+				glowType === "burn" ? "border-red-500/30" :
+				glowType === "compliment" ? "border-blue-500/30" :
+				"border-border"
+			}`}>
 				<div className="px-4 py-3 border-b border-border flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<div
 							className={`w-2 h-2 rounded-full transition-colors ${
-								isPlaying ? "bg-red-500 animate-pulse" : "bg-muted"
+								isPlaying
+									? activeType === "burn"
+										? "bg-red-500 animate-pulse"
+										: "bg-blue-500 animate-pulse"
+									: "bg-muted"
 							}`}
 						/>
 						<span className="text-xs text-muted-foreground font-mono">
@@ -171,7 +209,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 							{stagePhase === "done" && "Roast complete"}
 						</span>
 					</div>
-					{stagePhase === "segments" && currentIndex >= 0 && currentSegment && (
+					{currentSegment && (
 						<span className="text-sm">{currentSegment.type === "burn" ? "🔥" : "💙"}</span>
 					)}
 				</div>
@@ -180,12 +218,12 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 					{playedSegments.map((seg, i) => (
 						<div
 							key={`seg-${i}`}
-							className={`text-sm leading-relaxed ${
+							className={`text-sm leading-relaxed transition-all ${
 								seg.type === "burn" ? "text-red-400" : "text-blue-400"
 							}`}
 							style={{ animation: "fade-up 0.3s ease-out both" }}
 						>
-							<span className="mr-2 text-xs opacity-50">
+							<span className="mr-2 text-xs">
 								{seg.type === "burn" ? "🔥" : "💙"}
 							</span>
 							{seg.text}
