@@ -17,19 +17,19 @@ function play(name: string, volume = 0.85) {
 }
 
 const BURN_SFX = [
-	{ name: "rimshot", vol: 0.9 },
-	{ name: "airhorn", vol: 0.75 },
-	{ name: "crowd-laugh", vol: 0.85 },
-	{ name: "crowd-ooh", vol: 0.85 },
-	{ name: "record-scratch", vol: 0.8 },
-	{ name: "sad-trombone", vol: 0.8 },
-	{ name: "womp-womp", vol: 0.8 },
+	{ name: "rimshot", vol: 0.85 },
+	{ name: "airhorn", vol: 0.45 },
+	{ name: "crowd-laugh", vol: 0.5 },
+	{ name: "crowd-ooh", vol: 0.5 },
+	{ name: "punch", vol: 0.7 },
+	{ name: "sad-trombone", vol: 0.7 },
+	{ name: "womp-womp", vol: 0.7 },
 ];
 
 const COMPLIMENT_SFX = [
-	{ name: "crowd-cheer", vol: 0.9 },
-	{ name: "crowd-ooh", vol: 0.85 },
-	{ name: "crowd-laugh", vol: 0.8 },
+	{ name: "crowd-cheer", vol: 0.55 },
+	{ name: "crowd-ooh", vol: 0.5 },
+	{ name: "crowd-laugh", vol: 0.5 },
 ];
 
 function pickRandom<T>(arr: T[]): T {
@@ -46,7 +46,7 @@ function playVaried(options: { name: string; vol: number }[]) {
 }
 
 export function preloadAll() {
-	const all = [...BURN_SFX, ...COMPLIMENT_SFX, { name: "dramatic-hit" }, { name: "mic-drop" }];
+	const all = [...BURN_SFX, ...COMPLIMENT_SFX, { name: "dramatic-hit" }];
 	all.forEach((s) => preload(s.name));
 }
 
@@ -59,10 +59,6 @@ export function playComplimentSfx() {
 }
 
 export function playScoreSfx() {
-	play("dramatic-hit", 0.9);
-	setTimeout(() => play("crowd-cheer", 0.9), 1000);
-}
-
-export function playMicDrop() {
-	play("mic-drop", 0.7);
+	play("dramatic-hit", 0.7);
+	setTimeout(() => play("crowd-cheer", 0.55), 1000);
 }

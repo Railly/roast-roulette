@@ -12,11 +12,10 @@ const SFX_NAMES = [
 	"crowd-laugh",
 	"sad-trombone",
 	"crowd-ooh",
-	"mic-drop",
 	"crowd-cheer",
-	"record-scratch",
 	"dramatic-hit",
 	"womp-womp",
+	"punch",
 ];
 
 export function SfxManager() {

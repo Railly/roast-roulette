@@ -3,7 +3,7 @@ import type { RoastScript, RoastSegment } from "../lib/roast-engine";
 import { HypeScore } from "./hype-score";
 import { Orb, type AgentState } from "./ui/orb";
 import { ShimmeringText } from "./ui/shimmering-text";
-import { playBurnSfx, playComplimentSfx, playScoreSfx, playMicDrop, preloadAll } from "../lib/client-sfx";
+import { playBurnSfx, playComplimentSfx, playScoreSfx, preloadAll } from "../lib/client-sfx";
 
 interface RoastStageProps {
 	script: RoastScript;
@@ -93,9 +93,6 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 		for (let i = 0; i < script.segments.length; i++) {
 			await playSegment(i);
 		}
-
-		playMicDrop();
-		await new Promise((r) => setTimeout(r, 1200));
 
 		setStagePhase("score");
 		setOrbColors(PHASE_COLORS.score);
