@@ -3,7 +3,7 @@ import type { RoastScript, RoastSegment } from "../lib/roast-engine";
 import { HypeScore } from "./hype-score";
 import { Orb, type AgentState } from "./ui/orb";
 import { ShimmeringText } from "./ui/shimmering-text";
-import { playBurnSfx, playComplimentSfx, playScoreSfx } from "../lib/client-sfx";
+import { playBurnSfx, playComplimentSfx, playScoreSfx, playMicDrop, preloadAll } from "../lib/client-sfx";
 
 interface RoastStageProps {
 	script: RoastScript;
@@ -31,6 +31,10 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 	const [orbState, setOrbState] = useState<AgentState>("thinking");
 	const audioRef = useRef<HTMLAudioElement | null>(null);
 	const autoPlayStarted = useRef(false);
+
+	useEffect(() => {
+		preloadAll();
+	}, []);
 
 	const playAudio = useCallback((dataUri: string): Promise<void> => {
 		return new Promise((resolve) => {
@@ -72,7 +76,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 				} else {
 					playComplimentSfx();
 				}
-				await new Promise((r) => setTimeout(r, 600));
+				await new Promise((r) => setTimeout(r, 1000));
 			}
 
 			setOrbState("thinking");
@@ -89,6 +93,9 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 		for (let i = 0; i < script.segments.length; i++) {
 			await playSegment(i);
 		}
+
+		playMicDrop();
+		await new Promise((r) => setTimeout(r, 1200));
 
 		setStagePhase("score");
 		setOrbColors(PHASE_COLORS.score);
