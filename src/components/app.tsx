@@ -20,6 +20,7 @@ export function App() {
 				const data = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as ArrayBuffer));
 				if (data.type === "phase") setPhase(data.phase);
 				if (data.type === "script") setScript(data.script);
+				if (data.type === "debug") console.log("[ROAST DEBUG]", data);
 			} catch {}
 		},
 	});

@@ -1,6 +1,4 @@
 import { Agent, callable } from "agents";
-import { createWorkersAI } from "workers-ai-provider";
-import { generateText } from "ai";
 import { Buffer } from "node:buffer";
 import { createClient, streamToDataUri } from "../lib/elevenlabs";
 import { SFX_PROMPTS, type SfxKey } from "../lib/sfx";
@@ -55,10 +53,21 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.setState({ ...this.state, phase: "analyzing", url, lang });
 		this.broadcast(JSON.stringify({ type: "phase", phase: "analyzing" }));
 
-		const res = await fetch(url, {
-			headers: { "User-Agent": "RoastRoulette/1.0" },
-		});
-		const html = await res.text();
+		let html = "";
+		try {
+			const controller = new AbortController();
+			const timeout = setTimeout(() => controller.abort(), 10000);
+			const res = await fetch(url, {
+				headers: { "User-Agent": "RoastRoulette/1.0" },
+				signal: controller.signal,
+				redirect: "follow",
+			});
+			html = await res.text();
+			clearTimeout(timeout);
+		} catch (err) {
+			console.error("Fetch error:", err);
+			html = `<title>${url}</title><body>Could not fetch page content for ${url}</body>`;
+		}
 
 		const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() || url;
 		const textContent = html
@@ -67,9 +76,10 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 			.replace(/<[^>]+>/g, " ")
 			.replace(/\s+/g, " ")
 			.trim()
-			.slice(0, 15000);
+			.slice(0, 8000);
 
 		this.setState({ ...this.state, pageContent: textContent });
+		console.log(`Analyzed ${url}: ${textContent.length} chars, title: ${title}`);
 		return { content: textContent, title };
 	}
 
@@ -79,17 +89,26 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.broadcast(JSON.stringify({ type: "phase", phase: "scripting" }));
 
 		const lang = this.state.lang;
-		const workersai = createWorkersAI({ binding: this.env.AI });
 		let text = "";
 		try {
-			const result = await generateText({
-				model: workersai("@cf/moonshotai/kimi-k2.5"),
-				system: ROAST_SYSTEM_PROMPTS[lang],
-				prompt: buildRoastPrompt(this.state.url!, this.state.pageContent!, lang),
-			});
-			text = result.text;
+			const result = await this.env.AI.run(
+				"@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+				{
+					messages: [
+						{ role: "system", content: ROAST_SYSTEM_PROMPTS[lang] },
+						{ role: "user", content: buildRoastPrompt(this.state.url!, this.state.pageContent!, lang) },
+					],
+					max_tokens: 1500,
+				} as AiTextGenerationInput,
+			);
+			const inner = (result as { response: unknown }).response;
+			if (typeof inner === "string") {
+				text = inner;
+			} else if (typeof inner === "object" && inner !== null) {
+				text = JSON.stringify(inner);
+			}
 		} catch (err) {
-			console.error("Workers AI error:", err);
+			this.broadcast(JSON.stringify({ type: "debug", error: String(err) }));
 		}
 
 		console.log("Raw LLM response:", text.slice(0, 500));

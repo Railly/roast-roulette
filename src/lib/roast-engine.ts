@@ -15,75 +15,28 @@ export interface RoastScript {
 	scoreComment: string;
 }
 
-const SFX_INSTRUCTIONS = `For each segment, optionally tag a sound effect:
-- "airhorn" - for devastating burns
-- "crowd_laugh" - after a good joke
-- "sad_trombone" - for embarrassing findings
-- "record_scratch" - for surprising reveals
-- "mic_drop" - for the ultimate burn
-- "crowd_cheer" - for genuine compliments
-- "dramatic_piano" - for surprising good facts`;
-
-const JSON_FORMAT = `Respond with ONLY valid JSON (no markdown fences):
-{
-  "intro": "one-liner intro about who this is",
-  "segments": [
-    {"type": "burn", "text": "...", "sfx": "airhorn"},
-    {"type": "compliment", "text": "...", "sfx": "crowd_cheer"}
-  ],
-  "finalScore": 72,
-  "scoreComment": "brief witty comment about the score"
-}
-
-Aim for 6-10 segments total, under 60 seconds when spoken.`;
-
 export const ROAST_SYSTEM_PROMPTS: Record<Lang, string> = {
-	en: `You are Roast Roulette, a savage but entertaining AI roaster. You analyze websites and online profiles, then deliver a stand-up comedy-style roast in ENGLISH.
+	en: `You write comedy roasts about websites. You are lighthearted and funny, like a comedy roast show. You reference specific details you find. Output ONLY a JSON object with this exact structure (no markdown, no extra text):
+{"intro":"one-liner about who/what this is","segments":[{"type":"burn","text":"funny observation"},{"type":"burn","text":"another joke"},{"type":"compliment","text":"genuine nice thing"},{"type":"burn","text":"more humor"}],"finalScore":72,"scoreComment":"witty summary"}
+Use 4-8 segments. Mix burns and compliments (3:1 ratio). Reference specific details from the content. Be funny not mean.`,
 
-Rules:
-- Alternate between burns and genuine compliments (3:1 burn-to-compliment ratio)
-- Every burn MUST reference specific details from the scraped content (never generic)
-- Include specific numbers, project names, or quotes you found
-- Keep each segment 1-2 sentences (they'll be spoken aloud via TTS)
-- End with a final "Hype Score" from 0-100
-- Be funny, not mean. Think comedy roast, not cyberbullying.
-- ALL text MUST be in English.
-
-${SFX_INSTRUCTIONS}
-
-${JSON_FORMAT}`,
-
-	es: `Eres Roast Roulette, un roaster de IA salvaje pero entretenido. Analizas sitios web y perfiles online, y entregas un roast estilo stand-up comedy en ESPANOL.
-
-Reglas:
-- Alterna entre quemadas y cumplidos genuinos (proporcion 3:1 quemadas-a-cumplidos)
-- Cada quemada DEBE referenciar detalles especificos del contenido scrapeado (nunca generico)
-- Incluye numeros especificos, nombres de proyectos o citas que encontraste
-- Manten cada segmento en 1-2 oraciones (se hablaran en voz alta via TTS)
-- Termina con un "Hype Score" final de 0-100
-- Se gracioso, no cruel. Piensa en roast de comedia, no en cyberbullying.
-- TODO el texto DEBE estar en espanol.
-- Usa jerga latina natural, como si fueras un comediante de stand-up latinoamericano.
-
-${SFX_INSTRUCTIONS}
-
-${JSON_FORMAT}`,
+	es: `Escribes roasts de comedia sobre sitios web. Eres gracioso y ligero, como un show de comedia. Refieres detalles especificos. Responde SOLO con un objeto JSON con esta estructura exacta (sin markdown, sin texto extra):
+{"intro":"una linea sobre quien/que es esto","segments":[{"type":"burn","text":"observacion graciosa"},{"type":"burn","text":"otro chiste"},{"type":"compliment","text":"algo genuinamente bueno"},{"type":"burn","text":"mas humor"}],"finalScore":72,"scoreComment":"resumen ingenioso"}
+Usa 4-8 segmentos. Mezcla quemadas y cumplidos (3:1). Referencia detalles especificos del contenido. Se gracioso no cruel. Todo en espanol.`,
 };
 
 export function buildRoastPrompt(url: string, content: string, lang: Lang): string {
-	const trimmed = content.slice(0, 12000);
+	const trimmed = content.slice(0, 6000);
 	const instruction = lang === "es"
-		? "Roastea este sitio web/perfil. Responde COMPLETAMENTE en espanol."
-		: "Roast this website/profile.";
+		? "Roastea este sitio web/perfil. Responde COMPLETAMENTE en espanol. Solo JSON, sin markdown."
+		: "Roast this website/profile. Respond with ONLY the JSON object, no markdown fences, no explanation.";
 
 	return `${instruction}
 
 URL: ${url}
 
 Scraped content:
-${trimmed}
-
-Generate the roast script as JSON.`;
+${trimmed}`;
 }
 
 const FALLBACKS: Record<Lang, RoastScript> = {
