@@ -9,27 +9,29 @@ function preload(name: string): HTMLAudioElement {
 	return audio;
 }
 
-function play(name: string, volume = 0.85) {
+function play(name: string, volume = 0.7) {
 	const audio = preload(name);
 	const clone = audio.cloneNode(true) as HTMLAudioElement;
 	clone.volume = Math.min(1, volume);
 	clone.play().catch(() => {});
 }
 
+const SFX_VOL = 0.7;
+
 const BURN_SFX = [
-	{ name: "rimshot", vol: 0.85 },
-	{ name: "airhorn", vol: 0.45 },
-	{ name: "crowd-laugh", vol: 0.5 },
-	{ name: "crowd-ooh", vol: 0.5 },
-	{ name: "punch", vol: 0.7 },
-	{ name: "sad-trombone", vol: 0.7 },
-	{ name: "womp-womp", vol: 0.7 },
+	"rimshot",
+	"airhorn",
+	"crowd-laugh",
+	"crowd-ooh",
+	"punch",
+	"sad-trombone",
+	"womp-womp",
 ];
 
 const COMPLIMENT_SFX = [
-	{ name: "crowd-cheer", vol: 0.55 },
-	{ name: "crowd-ooh", vol: 0.5 },
-	{ name: "crowd-laugh", vol: 0.5 },
+	"crowd-cheer",
+	"crowd-ooh",
+	"crowd-laugh",
 ];
 
 function pickRandom<T>(arr: T[]): T {
@@ -38,16 +40,16 @@ function pickRandom<T>(arr: T[]): T {
 
 let lastPlayed = "";
 
-function playVaried(options: { name: string; vol: number }[]) {
-	const filtered = options.length > 1 ? options.filter((o) => o.name !== lastPlayed) : options;
+function playVaried(options: string[]) {
+	const filtered = options.length > 1 ? options.filter((o) => o !== lastPlayed) : options;
 	const pick = pickRandom(filtered);
-	lastPlayed = pick.name;
-	play(pick.name, pick.vol);
+	lastPlayed = pick;
+	play(pick, SFX_VOL);
 }
 
 export function preloadAll() {
-	const all = [...BURN_SFX, ...COMPLIMENT_SFX, { name: "dramatic-hit" }];
-	all.forEach((s) => preload(s.name));
+	const all = new Set([...BURN_SFX, ...COMPLIMENT_SFX, "dramatic-hit"]);
+	all.forEach((s) => preload(s));
 }
 
 export function playBurnSfx() {
@@ -59,6 +61,6 @@ export function playComplimentSfx() {
 }
 
 export function playScoreSfx() {
-	play("dramatic-hit", 0.7);
-	setTimeout(() => play("crowd-cheer", 0.55), 1000);
+	play("dramatic-hit", SFX_VOL);
+	setTimeout(() => play("crowd-cheer", SFX_VOL), 1000);
 }

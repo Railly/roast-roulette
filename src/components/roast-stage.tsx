@@ -70,7 +70,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 
 			await playAudio(result.audio);
 
-			if (segment && index >= 0) {
+			if (segment) {
 				if (segment.type === "burn") {
 					playBurnSfx();
 				} else {
