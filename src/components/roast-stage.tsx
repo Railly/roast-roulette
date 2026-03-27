@@ -106,7 +106,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 		setOrbColors(PHASE_COLORS.done);
 		setOrbState(null);
 		setStagePhase("done");
-	}, [script, agent, playSegment, playAudio, playSfx]);
+	}, [script, agent, playSegment, playAudio]);
 
 	useEffect(() => {
 		if (!autoPlayStarted.current) {
