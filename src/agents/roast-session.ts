@@ -1,6 +1,7 @@
 import { Agent, callable } from "agents";
 import { createWorkersAI } from "workers-ai-provider";
 import { generateText } from "ai";
+import { Buffer } from "node:buffer";
 import { createClient, streamToDataUri } from "../lib/elevenlabs";
 import { SFX_PROMPTS, type SfxKey } from "../lib/sfx";
 import {
@@ -9,6 +10,7 @@ import {
 	parseRoastScript,
 	type RoastScript,
 } from "../lib/roast-engine";
+import type { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 export interface RoastState {
 	phase: "idle" | "analyzing" | "scripting" | "delivering" | "scoring" | "defense" | "done";
@@ -147,12 +149,14 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 	): Promise<string | undefined> {
 		const r2Key = `sfx/${key}.mp3`;
 
-		const cached = await this.env.AUDIO_BUCKET.get(r2Key);
-		if (cached) {
-			const buffer = await cached.arrayBuffer();
-			const base64 = Buffer.from(buffer).toString("base64");
-			return `data:audio/mpeg;base64,${base64}`;
-		}
+		try {
+			const cached = await this.env.AUDIO_BUCKET?.get(r2Key);
+			if (cached) {
+				const buf = await cached.arrayBuffer();
+				const base64 = Buffer.from(buf).toString("base64");
+				return `data:audio/mpeg;base64,${base64}`;
+			}
+		} catch {}
 
 		const prompt = SFX_PROMPTS[key];
 		if (!prompt) return undefined;
@@ -165,14 +169,14 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 
 		const dataUri = await streamToDataUri(audio);
 
-		const base64Data = dataUri.split(",")[1];
-		const binaryData = Buffer.from(base64Data, "base64");
-		await this.env.AUDIO_BUCKET.put(r2Key, binaryData, {
-			httpMetadata: { contentType: "audio/mpeg" },
-		});
+		try {
+			const base64Data = dataUri.split(",")[1];
+			const binaryData = Buffer.from(base64Data, "base64");
+			await this.env.AUDIO_BUCKET?.put(r2Key, binaryData, {
+				httpMetadata: { contentType: "audio/mpeg" },
+			});
+		} catch {}
 
 		return dataUri;
 	}
 }
-
-type ElevenLabsClient = ReturnType<typeof createClient>;

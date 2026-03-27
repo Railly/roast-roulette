@@ -4,7 +4,7 @@ import { HypeScore } from "./hype-score";
 
 interface RoastStageProps {
 	script: RoastScript;
-	agent: { call: (method: string, ...args: unknown[]) => Promise<unknown> };
+	agent: { call: (method: string, args?: unknown[]) => Promise<unknown> };
 	onReset: () => void;
 }
 
@@ -17,7 +17,6 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 	const [showScore, setShowScore] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const audioRef = useRef<HTMLAudioElement | null>(null);
-	const sfxRef = useRef<HTMLAudioElement | null>(null);
 	const autoPlayStarted = useRef(false);
 
 	const playAudio = useCallback((dataUri: string): Promise<void> => {
@@ -32,8 +31,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 
 	const playSfx = useCallback((dataUri: string) => {
 		const audio = new Audio(dataUri);
-		sfxRef.current = audio;
-		audio.volume = 0.4;
+		audio.volume = 0.35;
 		audio.play().catch(() => {});
 	}, []);
 
@@ -42,32 +40,34 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 			setIsPlaying(true);
 			setCurrentIndex(index);
 
-			const result = (await agent.call("speakSegment", index)) as {
+			const result = (await agent.call("speakSegment", [index])) as {
 				audio: string;
 				sfxAudio?: string;
 			};
 
-			const segment = index === -1
-				? { type: "burn" as const, text: script.intro }
-				: script.segments[index];
+			const segment =
+				index === -1 ? { type: "burn" as const, text: script.intro } : script.segments[index];
 
 			if (segment) {
 				setPlayedSegments((prev) => [...prev, segment]);
 			}
 
+			await playAudio(result.audio);
+
 			if (result.sfxAudio) {
-				setTimeout(() => playSfx(result.sfxAudio!), 200);
+				playSfx(result.sfxAudio);
 			}
 
-			await playAudio(result.audio);
 			setIsPlaying(false);
 		},
 		[agent, script, playAudio, playSfx],
 	);
 
 	const playAll = useCallback(async () => {
+		setStagePhase("intro");
 		await playSegment(-1);
 
+		setStagePhase("segments");
 		for (let i = 0; i < script.segments.length; i++) {
 			await playSegment(i);
 		}
@@ -93,31 +93,39 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 		}
 	}, [playAll]);
 
+	const scrollRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (scrollRef.current) {
+			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+		}
+	}, [playedSegments]);
+
 	return (
 		<div className="space-y-6" style={{ animation: "scale-in 0.4s ease-out both" }}>
-			<div className="border border-[#262626] rounded-xl overflow-hidden">
-				<div className="px-4 py-3 border-b border-[#262626] flex items-center justify-between">
+			<div className="border border-[var(--border)] rounded-xl overflow-hidden">
+				<div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<div
 							className={`w-2 h-2 rounded-full ${
-								isPlaying ? "bg-red-500 animate-pulse" : "bg-[#525252]"
+								isPlaying ? "bg-red-500 animate-pulse" : "bg-[var(--muted)]"
 							}`}
 						/>
-						<span className="text-xs text-[#a3a3a3] font-mono">
+						<span className="text-xs text-[var(--muted-foreground)] font-mono">
 							{stagePhase === "intro" && "Starting roast..."}
-							{stagePhase === "segments" && `Segment ${currentIndex + 1}/${script.segments.length}`}
+							{stagePhase === "segments" &&
+								`Segment ${Math.max(0, currentIndex) + 1}/${script.segments.length}`}
 							{stagePhase === "score" && "Final score..."}
 							{stagePhase === "done" && "Roast complete"}
 						</span>
 					</div>
-					{stagePhase === "segments" && (
-						<span className="text-[10px] text-[#525252] font-mono">
+					{stagePhase === "segments" && currentIndex >= 0 && (
+						<span className="text-sm">
 							{script.segments[currentIndex]?.type === "burn" ? "🔥" : "💙"}
 						</span>
 					)}
 				</div>
 
-				<div className="p-5 space-y-3 max-h-80 overflow-y-auto">
+				<div ref={scrollRef} className="p-5 space-y-3 max-h-80 overflow-y-auto">
 					{playedSegments.map((seg, i) => (
 						<div
 							key={`seg-${i}`}
@@ -134,24 +142,20 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 					))}
 
 					{isPlaying && (
-						<div className="flex items-center gap-2 text-[#525252]">
-							<div className="flex gap-0.5">
-								{[0, 1, 2].map((i) => (
-									<div
-										key={`dot-${i}`}
-										className="w-1.5 h-1.5 bg-current rounded-full animate-pulse"
-										style={{ animationDelay: `${i * 150}ms` }}
-									/>
-								))}
-							</div>
+						<div className="flex items-center gap-1.5 py-1">
+							{[0, 1, 2].map((i) => (
+								<div
+									key={`dot-${i}`}
+									className="w-1.5 h-1.5 bg-[var(--muted)] rounded-full animate-pulse"
+									style={{ animationDelay: `${i * 150}ms` }}
+								/>
+							))}
 						</div>
 					)}
 				</div>
 			</div>
 
-			{showScore && (
-				<HypeScore score={script.finalScore} comment={script.scoreComment} />
-			)}
+			{showScore && <HypeScore score={script.finalScore} comment={script.scoreComment} />}
 
 			{stagePhase === "done" && (
 				<div
@@ -161,7 +165,7 @@ export function RoastStage({ script, agent, onReset }: RoastStageProps) {
 					<button
 						type="button"
 						onClick={onReset}
-						className="px-5 py-2.5 bg-[#171717] border border-[#262626] text-sm text-[#a3a3a3] rounded-lg hover:text-white hover:border-[#525252] transition-all"
+						className="px-5 py-2.5 bg-[var(--accent)] border border-[var(--border)] text-sm text-[var(--muted-foreground)] rounded-lg hover:text-[var(--foreground)] hover:border-[var(--muted)] transition-all"
 					>
 						Roast another
 					</button>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useAgent } from "agents/react";
 import { UrlInput } from "./url-input";
 import { RoastStage } from "./roast-stage";
@@ -8,32 +8,29 @@ type Phase = "idle" | "analyzing" | "scripting" | "delivering" | "scoring" | "do
 
 export function App() {
 	const [phase, setPhase] = useState<Phase>("idle");
-	const [url, setUrl] = useState("");
 	const [script, setScript] = useState<RoastScript | null>(null);
 	const [error, setError] = useState("");
-	const agentRef = useRef<ReturnType<typeof useAgent> | null>(null);
 
 	const agent = useAgent({
 		agent: "roast-session",
-		onMessage: (msg) => {
+		onMessage: (evt) => {
 			try {
-				const data = JSON.parse(typeof msg === "string" ? msg : new TextDecoder().decode(msg as ArrayBuffer));
+				const raw = typeof evt === "object" && "data" in evt ? (evt as MessageEvent).data : evt;
+				const data = JSON.parse(typeof raw === "string" ? raw : new TextDecoder().decode(raw as ArrayBuffer));
 				if (data.type === "phase") setPhase(data.phase);
 				if (data.type === "script") setScript(data.script);
 			} catch {}
 		},
 	});
-	agentRef.current = agent;
 
 	const handleSubmit = useCallback(
 		async (inputUrl: string) => {
-			setUrl(inputUrl);
 			setPhase("analyzing");
 			setError("");
 			setScript(null);
 
 			try {
-				await agent.call("analyzeUrl", inputUrl);
+				await agent.call("analyzeUrl", [inputUrl]);
 				const roastScript = (await agent.call("generateRoast")) as RoastScript;
 				setScript(roastScript);
 				setPhase("delivering");
@@ -47,7 +44,6 @@ export function App() {
 
 	const handleReset = useCallback(() => {
 		setPhase("idle");
-		setUrl("");
 		setScript(null);
 		setError("");
 	}, []);
@@ -76,7 +72,7 @@ export function App() {
 						<span className="text-red-500">Roast</span> Roulette
 					</h1>
 					<p
-						className={`text-[#a3a3a3] transition-all duration-500 ${
+						className={`text-[var(--muted-foreground)] transition-all duration-500 ${
 							isIdle ? "text-base opacity-100" : "text-xs opacity-0 max-h-0 overflow-hidden"
 						}`}
 					>
@@ -110,8 +106,9 @@ export function App() {
 						className="mt-10 text-center"
 						style={{ animation: "fade-in 0.5s ease-out 0.2s both" }}
 					>
-						<p className="text-xs text-[#525252]">
-							Built with Cloudflare Workers + ElevenLabs
+						<p className="text-xs text-[var(--muted)]">
+							Built with Cloudflare Workers + ElevenLabs for{" "}
+							<span className="text-[var(--muted-foreground)]">#ElevenHacks</span>
 						</p>
 					</div>
 				)}

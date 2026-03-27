@@ -1,16 +1,11 @@
 {
   "name": "roast-roulette",
+  "account_id": "62819ee0a8411123c2635cbf37b577c1",
   "main": "src/server.ts",
   "compatibility_date": "2026-01-28",
   "compatibility_flags": ["nodejs_compat"],
 
-  "ai": { "binding": "AI" },
-  "r2_buckets": [
-    { "binding": "AUDIO_BUCKET", "bucket_name": "roast-roulette-audio" }
-  ],
-  "kv_namespaces": [
-    { "binding": "LEADERBOARD_KV", "id": "placeholder" }
-  ],
+  "ai": { "binding": "AI", "remote": true },
   "secrets": { "required": ["ELEVENLABS_API_KEY"] },
 
   "assets": {
