@@ -12,7 +12,7 @@ export function App() {
 	const [error, setError] = useState("");
 
 	const agent = useAgent({
-		agent: "roast-session",
+		agent: "RoastSessionAgent",
 		onMessage: (evt) => {
 			try {
 				const raw = typeof evt === "object" && "data" in evt ? (evt as MessageEvent).data : evt;

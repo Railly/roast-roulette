@@ -59,17 +59,38 @@ Generate the roast script as JSON.`;
 }
 
 export function parseRoastScript(text: string): RoastScript {
-	const cleaned = text.replace(/```[\s\S]*?```/g, "").trim();
-	const jsonStr = cleaned.match(/\{[\s\S]*\}/)?.[0];
-	if (!jsonStr) {
+	const fallback: RoastScript = {
+		intro: "Well, this is awkward...",
+		segments: [
+			{ type: "burn", text: "I tried to roast you but your site broke my brain.", sfx: "sad_trombone" },
+			{ type: "compliment", text: "But hey, at least you have a website. That's more than most people.", sfx: "crowd_cheer" },
+		],
+		finalScore: 50,
+		scoreComment: "Inconclusive. Try again.",
+	};
+
+	try {
+		const cleaned = text
+			.replace(/```json\s*/g, "")
+			.replace(/```\s*/g, "")
+			.trim();
+		const jsonStr = cleaned.match(/\{[\s\S]*\}/)?.[0];
+		if (!jsonStr) return fallback;
+
+		const parsed = JSON.parse(jsonStr);
+		if (!parsed.segments || !Array.isArray(parsed.segments)) return fallback;
+
 		return {
-			intro: "Well, this is awkward...",
-			segments: [
-				{ type: "burn", text: "I tried to roast you but your site broke my brain.", sfx: "sad_trombone" },
-			],
-			finalScore: 50,
-			scoreComment: "Inconclusive. Try again.",
+			intro: parsed.intro || fallback.intro,
+			segments: parsed.segments.map((s: Record<string, unknown>) => ({
+				type: s.type === "compliment" ? "compliment" : "burn",
+				text: String(s.text || ""),
+				sfx: s.sfx ? String(s.sfx) : undefined,
+			})),
+			finalScore: typeof parsed.finalScore === "number" ? parsed.finalScore : 50,
+			scoreComment: String(parsed.scoreComment || "No comment."),
 		};
+	} catch {
+		return fallback;
 	}
-	return JSON.parse(jsonStr);
 }

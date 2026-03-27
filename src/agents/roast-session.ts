@@ -63,12 +63,19 @@ export class RoastSessionAgent extends Agent<Env, RoastState> {
 		this.broadcast(JSON.stringify({ type: "phase", phase: "scripting" }));
 
 		const workersai = createWorkersAI({ binding: this.env.AI });
-		const { text } = await generateText({
-			model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-			system: ROAST_SYSTEM_PROMPT,
-			prompt: buildRoastPrompt(this.state.url!, this.state.pageContent!),
-		});
+		let text = "";
+		try {
+			const result = await generateText({
+				model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
+				system: ROAST_SYSTEM_PROMPT,
+				prompt: buildRoastPrompt(this.state.url!, this.state.pageContent!),
+			});
+			text = result.text;
+		} catch (err) {
+			console.error("Workers AI error:", err);
+		}
 
+		console.log("Raw LLM response:", text.slice(0, 500));
 		const script = parseRoastScript(text);
 		this.setState({ ...this.state, script, phase: "delivering", currentSegment: 0 });
 		this.broadcast(JSON.stringify({ type: "phase", phase: "delivering" }));
